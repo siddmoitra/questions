@@ -1,0 +1,74 @@
+name: deploy-workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        description: SHA or Version
+      environment:
+        required: true
+        description: Environment
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Create deployment with pending status
+        id: create_deployment
+        uses: actions/github-script@v4.0.2
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const args = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: process.env.VERSION,
+              required_contexts: [],
+              environment: process.env.ENVIRONMENT,
+              auto_merge: false
+            }
+            const deploymentResponse = await github.repos.createDeployment(args)
+            if (deploymentResponse.status != 201) {
+              core.setFailed(`Create deployment failed with status: ${deploymentResponse.status}`);
+
+            } else {
+              await github.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deploymentResponse.data.id,
+                state: 'pending',
+                target_url: `https://github.com/siddmoitra/questions/actions/runs/${process.env.GITHUB_RUN_ID}`
+              })
+              core.setOutput('deployment_id', deploymentResponse.data.id)
+
+            }
+
+      - name: Deploy
+        run: |
+          echo "Actual Deployment script"
+
+      - name: Result Status
+        if: always()
+        uses: actions/github-script@v4.0.2
+        env:
+          STATUS: ${{ job.status }}
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+          DEPLOYMENT_ID: ${{ steps.create_deployment.outputs.deployment_id }}
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const state = process.env.STATUS.toLowerCase() === 'success'
+              ? 'success'
+              : 'failure'
+
+            github.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: process.env.DEPLOYMENT_ID,
+              state,
+              target_url: `https://github.com/siddmoitra/questions/actions/runs/${process.env.GITHUB_RUN_ID}`
+            })

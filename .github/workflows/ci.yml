@@ -1,0 +1,104 @@
+name: ci-workflow
+
+on: [push]
+
+env:
+  DOCKER_REPO_URL: ghcr.io/siddmoitra/questions
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node 16
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+
+      - name: Test
+        run: |
+          npm run test
+
+  build:
+    name: Build and Dockerize
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
+    outputs:
+      release-version: ${{ steps.dockerize.outputs.release-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node 16
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install semantic-release (on main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          npm set registry https://registry.npmjs.org/
+          sudo npm install -g \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/github \
+            @semantic-release/exec \
+            @semantic-release/release-notes-generator \
+            conventional-changelog-conventionalcommits
+
+      - name: Generate version (on main)
+        if: github.ref == 'refs/heads/main'
+        id: generate_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          npx semantic-release --ci
+
+      - name: Dockerize (on develop and main)
+        id: dockerize
+        env:
+          RELEASE_VERSION: ${{ github.ref == 'refs/heads/main' && steps.generate_version.outputs.release_version || github.sha }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo $GH_TOKEN | docker login ghcr.io --username siddmoitra --password-stdin
+          docker build -t $DOCKER_REPO_URL:$RELEASE_VERSION .
+          docker push $DOCKER_REPO_URL:$RELEASE_VERSION
+          echo "::set-output name=release-version::$RELEASE_VERSION"
+          
+
+  deploy:
+    name: Trigger Deploy 
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
+    steps:
+      - name: Trigger deploy
+        uses: actions/github-script@v4.0.2
+        env:
+          ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+          VERSION: ${{ needs.build.outputs.release-version }}
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            const args = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yml',
+              ref: 'develop',
+              inputs: {
+                version: process.env.VERSION,
+                environment: process.env.ENV
+              }
+            }
+            await github.actions.createWorkflowDispatch(args)
+
