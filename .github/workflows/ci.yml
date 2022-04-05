@@ -42,18 +42,31 @@ jobs:
         with:
           node-version: '16'
 
+      - name: Install semantic-release (on main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          npm set registry https://registry.npmjs.org/
+          npm install -g \
+            semantic-release \
+            @semantic-release/commit-analyzer \
+            @semantic-release/github \
+            @semantic-release/exec \
+            @semantic-release/release-notes-generator \
+            conventional-changelog-conventionalcommits
+
       - name: Generate version (on main)
-        uses: cycjimmy/semantic-release-action@v3
         if: github.ref == 'refs/heads/main'
         id: generate_version
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           NPM_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          npx semantic-release --ci
 
       - name: Dockerize (on develop and main)
         id: dockerize
         env:
-          RELEASE_VERSION: ${{ github.ref == 'refs/heads/main' && steps.generate_version.outputs.new_release_version || github.sha }}
+          RELEASE_VERSION: ${{ github.ref == 'refs/heads/main' && steps.generate_version.outputs.release_version || github.sha }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
