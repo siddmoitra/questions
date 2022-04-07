@@ -1,0 +1,14 @@
+name: deploy-workflow
+
+on: [workflow_dispatch]
+
+env:
+  ENVIRONMENT: DEVELOPMENT
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Test
+        run: |
+          echo "DATABASE_URL=${{ secrets[`DATABASE_URL_${env.ENVIRONMENT}`] }}"
