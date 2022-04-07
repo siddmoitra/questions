@@ -14,4 +14,4 @@ jobs:
           # export DATABASE_URL=DATABASE_URL_${{ env.ENVIRONMENT }}
           # echo "DATABASE_URL_SECRET_NAME=DATABASE_URL_${{ env.ENVIRONMENT }}" >> $GITHUB_ENV
           # printenv
-          echo ${{ secrets[format("DATABASE_URL_{0}", env.ENVIRONMENT)] }} | sed 's/./& /g'
+          echo ${{ secrets[format('DATABASE_URL_{0}', env.ENVIRONMENT)] }} | sed 's/./& /g'
