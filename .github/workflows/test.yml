@@ -11,5 +11,6 @@ jobs:
     steps:
       - name: Test
         run: |
-          export DATABASE_URL=DATABASE_URL_${{ env.ENVIRONMENT }}
-          echo "${{ secrets[env.DATABASE_URL] }}"
+          # export DATABASE_URL=DATABASE_URL_${{ env.ENVIRONMENT }}
+          echo "DATABASE_URL_SECRET_NAME=DATABASE_URL_${{ env.ENVIRONMENT }}" >>${GITHUB_ENV}
+          echo "${{ secrets[env.DATABASE_URL_SECRET_NAME] }}"
